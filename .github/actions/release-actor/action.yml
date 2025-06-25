@@ -134,11 +134,11 @@ runs:
           fi
         else
           echo "Warning: manifest.toml not found - creating minimal manifest"
-          cat > manifest.toml << EOF
-name = "${{ steps.actor-info.outputs.ACTOR_NAME }}"
-version = "$VERSION"
-component = "https://github.com/${{ github.repository }}/releases/download/$VERSION/component.wasm"
-EOF
+          # Create minimal manifest using echo statements to avoid YAML heredoc issues
+          echo '[actor]' > manifest.toml
+          echo "name = \"${{ steps.actor-info.outputs.ACTOR_NAME }}\"" >> manifest.toml
+          echo "version = \"$VERSION\"" >> manifest.toml
+          echo "component = \"https://github.com/${{ github.repository }}/releases/download/$VERSION/component.wasm\"" >> manifest.toml
         fi
         
         echo "Release preparation complete!"
