@@ -135,7 +135,6 @@ runs:
         else
           echo "Warning: manifest.toml not found - creating minimal manifest"
           cat > manifest.toml << EOF
-[actor]
 name = "${{ steps.actor-info.outputs.ACTOR_NAME }}"
 version = "$VERSION"
 component = "https://github.com/${{ github.repository }}/releases/download/$VERSION/component.wasm"
