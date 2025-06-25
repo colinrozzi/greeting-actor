@@ -57,16 +57,31 @@ runs:
       shell: bash
       run: |
         if ! command -v cargo-component &> /dev/null; then
-          echo "Downloading pre-built cargo-component binary..."
-          mkdir -p ~/.cargo/bin
+          echo "Installing cargo-component via cargo-binstall (fast binary install)..."
           
-          # Download the latest release binary
-          CARGO_COMPONENT_URL="https://github.com/bytecodealliance/cargo-component/releases/latest/download/cargo-component-x86_64-unknown-linux-gnu"
-          curl -L "$CARGO_COMPONENT_URL" -o ~/.cargo/bin/cargo-component
-          chmod +x ~/.cargo/bin/cargo-component
+          # Install cargo-binstall if not present
+          if ! command -v cargo-binstall &> /dev/null; then
+            echo "Installing cargo-binstall first..."
+            curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
           
-          # Verify installation
-          cargo-component --version
+          # Use cargo-binstall to install cargo-component (uses prebuilt binaries)
+          if cargo-binstall --version &> /dev/null; then
+            echo "Installing cargo-component via cargo-binstall..."
+            cargo binstall cargo-component --no-confirm --force
+            
+            # Verify installation
+            if cargo-component --version &> /dev/null; then
+              echo "cargo-component successfully installed via cargo-binstall"
+            else
+              echo "cargo-binstall failed, falling back to cargo install"
+              cargo install cargo-component
+            fi
+          else
+            echo "cargo-binstall installation failed, falling back to cargo install"
+            cargo install cargo-component
+          fi
         else
           echo "cargo-component already installed"
         fi
