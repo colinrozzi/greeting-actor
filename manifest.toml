@@ -5,6 +5,39 @@ description = "A simple greeting actor for the theater system"
 save_chain = true
 init_state = "/Users/colinrozzi/work/actor-registry/git-command-actor/init.json"
 
+[permission_policy.message_server]
+type = "inherit"
+
+[permission_policy.file_system]
+type = "inherit"
+
+[permission_policy.http_client]
+type = "inherit"
+
+[permission_policy.http_framework]
+type = "inherit"
+
+[permission_policy.runtime]
+type = "inherit"
+
+[permission_policy.supervisor]
+type = "inherit"
+
+[permission_policy.store]
+type = "inherit"
+
+[permission_policy.timing]
+type = "inherit"
+
+[permission_policy.process]
+type = "inherit"
+
+[permission_policy.environment]
+type = "inherit"
+
+[permission_policy.random]
+type = "inherit"
+
 [[handlers]]
 type = "runtime"
 
