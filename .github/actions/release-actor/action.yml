@@ -40,50 +40,50 @@ runs:
         echo "Detected actor name: $ACTOR_NAME"
         
     - name: Setup Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ inputs.rust-toolchain }}
-        target: ${{ inputs.wasm-target }}
-        override: true
+        targets: ${{ inputs.wasm-target }}
         
-    - name: Cache cargo registry
-      uses: actions/cache@v3
+    # Replace manual caching with specialized Rust cache
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
       with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ inputs.wasm-target }}-${{ inputs.rust-toolchain }}
+        cache-on-failure: true
         
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Cache target directory
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Cache cargo-component
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/bin/cargo-component
-        key: ${{ runner.os }}-cargo-component-${{ inputs.cargo-component-version }}
-        
-    - name: Install cargo-component
+    # Fast binary download instead of compilation
+    - name: Install cargo-component (fast binary download)
       shell: bash
       run: |
         if ! command -v cargo-component &> /dev/null; then
-          if [ "${{ inputs.cargo-component-version }}" = "latest" ]; then
-            cargo install cargo-component
-          else
-            cargo install cargo-component --version ${{ inputs.cargo-component-version }}
-          fi
+          echo "Downloading pre-built cargo-component binary..."
+          mkdir -p ~/.cargo/bin
+          
+          # Download the latest release binary
+          CARGO_COMPONENT_URL="https://github.com/bytecodealliance/cargo-component/releases/latest/download/cargo-component-x86_64-unknown-linux-gnu"
+          curl -L "$CARGO_COMPONENT_URL" -o ~/.cargo/bin/cargo-component
+          chmod +x ~/.cargo/bin/cargo-component
+          
+          # Verify installation
+          cargo-component --version
+        else
+          echo "cargo-component already installed"
         fi
         
+    # Optional: Setup sccache for even faster builds
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.4
+      
     - name: Build WASM component
       shell: bash
+      env:
+        # Use faster linker if available
+        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_LINKER: lld
+        # Enable sccache if installed
+        RUSTC_WRAPPER: sccache
       run: |
+        echo "Building WebAssembly component..."
         cargo component build --release --target ${{ inputs.wasm-target }}
         
     - name: Check for initial state in manifest
@@ -91,7 +91,7 @@ runs:
       shell: bash
       run: |
         # Check if manifest references initial_state
-        if grep -q "init_state" manifest.toml; then
+        if [ -f "manifest.toml" ] && grep -q "init_state" manifest.toml; then
           echo "HAS_INITIAL_STATE=true" >> $GITHUB_OUTPUT
           echo "Manifest includes initial_state reference"
         else
@@ -102,6 +102,8 @@ runs:
     - name: Prepare release assets
       shell: bash
       run: |
+        echo "Preparing release assets..."
+        
         # Auto-detect binary name
         WASM_FILE=$(find target/${{ inputs.wasm-target }}/release/ -name "*.wasm" -not -path "*/deps/*" | head -1)
         if [ -z "$WASM_FILE" ]; then
@@ -110,17 +112,34 @@ runs:
           BINARY_NAME=$(basename "$WASM_FILE" .wasm)
         fi
         
+        echo "Found WASM binary: $BINARY_NAME.wasm"
+        
         # Extract version from tag
         VERSION=${GITHUB_REF#refs/tags/}
+        echo "Release version: $VERSION"
         
         # Prepare core assets
-        cp target/${{ inputs.wasm-target }}/release/$BINARY_NAME.wasm component.wasm
+        cp "target/${{ inputs.wasm-target }}/release/$BINARY_NAME.wasm" component.wasm
+        echo "Copied component.wasm ($(du -h component.wasm | cut -f1))"
         
-        # Update manifest URLs
-        sed -i "s|component = \".*\"|component = \"https://github.com/${{ github.repository }}/releases/download/$VERSION/component.wasm\"|" manifest.toml
-        sed -i "s|version = \".*\"|version = \"$VERSION\"|" manifest.toml
-        
-        # Update initial_state URL if present
-        if [ "${{ steps.check-state.outputs.HAS_INITIAL_STATE }}" = "true" ]; then
-          sed -i "s|init_state = \".*\"|init_state = \"https://github.com/${{ github.repository }}/releases/download/$VERSION/init.json\"|" manifest.toml
+        # Update manifest URLs if manifest exists
+        if [ -f "manifest.toml" ]; then
+          echo "Updating manifest URLs..."
+          sed -i "s|component = \".*\"|component = \"https://github.com/${{ github.repository }}/releases/download/$VERSION/component.wasm\"|" manifest.toml
+          sed -i "s|version = \".*\"|version = \"$VERSION\"|" manifest.toml
+          
+          # Update initial_state URL if present
+          if [ "${{ steps.check-state.outputs.HAS_INITIAL_STATE }}" = "true" ]; then
+            sed -i "s|init_state = \".*\"|init_state = \"https://github.com/${{ github.repository }}/releases/download/$VERSION/init.json\"|" manifest.toml
+          fi
+        else
+          echo "Warning: manifest.toml not found - creating minimal manifest"
+          cat > manifest.toml << EOF
+[actor]
+name = "${{ steps.actor-info.outputs.ACTOR_NAME }}"
+version = "$VERSION"
+component = "https://github.com/${{ github.repository }}/releases/download/$VERSION/component.wasm"
+EOF
         fi
+        
+        echo "Release preparation complete!"
