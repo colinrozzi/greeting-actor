@@ -82,8 +82,6 @@ runs:
     - name: Build WASM component
       shell: bash
       env:
-        # Use faster linker if available
-        CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_LINKER: lld
         # Enable sccache if installed
         RUSTC_WRAPPER: sccache
       run: |
