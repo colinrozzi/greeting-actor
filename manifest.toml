@@ -3,7 +3,6 @@ version = "0.1.0"
 component = "/Users/colinrozzi/work/actor-registry/greeting-actor/./target/wasm32-unknown-unknown/release/greeting_actor.wasm"
 description = "A simple greeting actor for the theater system"
 save_chain = true
-init_state = "/Users/colinrozzi/work/actor-registry/git-command-actor/init.json"
 
 [permission_policy.message_server]
 type = "inherit"
