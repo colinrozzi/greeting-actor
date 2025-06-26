@@ -20,7 +20,18 @@ jobs:
         
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          
+          # Extract major and minor versions for moving tags
+          if [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            echo "MAJOR=v${MAJOR}" >> $GITHUB_OUTPUT
+            echo "MINOR=v${MAJOR}.${MINOR}" >> $GITHUB_OUTPUT
+          fi
         
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -50,9 +61,21 @@ jobs:
             theater start https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/manifest.toml
             ```
             
-            ### 🔗 Manifest URL
+            ### 🔗 Manifest URLs
+            
+            **Specific version:**
             ```
             https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/manifest.toml
+            ```
+            
+            **Latest in minor series (recommended for dependencies):**
+            ```
+            https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.MINOR }}/manifest.toml
+            ```
+            
+            **Latest in major series:**
+            ```
+            https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.MAJOR }}/manifest.toml
             ```
             
             ### 📖 About
@@ -67,5 +90,22 @@ jobs:
             **Build:** [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Update moving tags
+        if: steps.version.outputs.MAJOR != '' && steps.version.outputs.MINOR != ''
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create/update major version tag (e.g., v0 points to latest v0.x.x)
+          git tag -f ${{ steps.version.outputs.MAJOR }} ${{ steps.version.outputs.VERSION }}
+          git push origin ${{ steps.version.outputs.MAJOR }} --force
+          
+          # Create/update minor version tag (e.g., v0.1 points to latest v0.1.x)
+          git tag -f ${{ steps.version.outputs.MINOR }} ${{ steps.version.outputs.VERSION }}
+          git push origin ${{ steps.version.outputs.MINOR }} --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
